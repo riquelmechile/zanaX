@@ -1,6 +1,6 @@
 # zanaX 🤖🍌
 
-> Agente autónomo de X que investiga tendencias de AI/dev cada día (incluidas cuentas clave dentro de X), escribe posts con tu propia voz, genera imágenes con nano banana (Gemini), aprende tus mejores horarios de publicación con un LLM, hace crecer tu red (seguir/dejar de seguir/comentar con límites seguros) y te pide aprobación por Telegram antes de publicar. Construido con LangGraph.
+> Agente autónomo de X que investiga tendencias de AI/dev cada día (incluidas cuentas clave dentro de X), escribe posts con tu propia voz, genera imágenes con nano banana (Gemini), aprende tus mejores horarios de publicación con un LLM, hace crecer tu red con límites seguros y te pide aprobación por Telegram antes de publicar. Construido con LangGraph.
 
 ## Arquitectura (grafo LangGraph)
 
@@ -18,7 +18,7 @@ HN+GitHub   LLM elige  nano banana  LLM con   Botones ✅/❌/✏️        twee
 - `src/agent/images.py` — generación de imágenes con **nano banana** (`gemini-2.5-flash-image`). Opcional, se activa con `ENABLE_IMAGES=true`.
 - `src/agent/graph.py` — grafo LangGraph (research → select → image → draft).
 - `src/agent/llm.py` — LLM multi-provider con dos roles: **barato** (`LLM_MODEL`, def. `gemini-2.5-flash`) para selección/análisis y **draft** (`LLM_MODEL_DRAFT`, def. `gemini-2.5-pro`) para redactar posts y comentarios. Provider: `google` (def.), `openai` o `anthropic`.
-- `src/agent/growth.py` — **crecimiento**: descubre cuentas afines al nicho, las sigue (tope `FOLLOW_PER_DAY`, def. 10/día), deja de seguir las que no devuelven el follow en 7 días (tope semanal + whitelist `X_NEVER_UNFOLLOW`) y redacta respuestas a posts con tracción que **siempre requieren tu ✅ en Telegram**.
+- `src/agent/growth.py` — **crecimiento**: descubre cuentas afines al nicho, las sigue (tope `FOLLOW_PER_DAY`, def. 100/día en tandas con pacing), deja de seguir las que no devuelven el follow en 7 días (tope `UNFOLLOW_PER_WEEK`, def. 50/semana + whitelist `X_NEVER_UNFOLLOW`) y redacta respuestas a posts con tracción que **siempre requieren tu ✅ en Telegram**.
 - `src/approval.py` — bot de Telegram: envía borradores y respuestas propuestas (con imagen si la hay); ✅ publica, ❌ descarta, o responde citando el mensaje con tu versión editada. Cada publicación queda registrada para el análisis de timing.
 - `src/x_client.py` — publicación con X API v2 (posts, respuestas e imagen vía media upload). `DRY_RUN=true` = modo prueba.
 - `src/main.py` — scheduler **dinámico** (horas aprendidas por el LLM) + jobs de crecimiento + polling de Telegram en un solo proceso.
@@ -30,12 +30,12 @@ HN+GitHub   LLM elige  nano banana  LLM con   Botones ✅/❌/✏️        twee
 3. Cada lunes un LLM cruza ese historial con heurísticas del nicho AI/dev y decide las 2 mejores horas; el scheduler se reconfigura solo.
 4. Sin datos todavía → usa heurísticas (9:30 y 18:00).
 
-## Crecimiento automático (con límites seguros)
+## Crecimiento automático (al máximo seguro)
 
-- **Seguir**: cada mañana descubre cuentas del nicho con engagement real (filtra bots: mín. 500 seguidores) y sigue hasta `FOLLOW_PER_DAY`. Te avisa por Telegram.
-- **Dejar de seguir**: cada domingo limpia cuentas que no devolvieron el follow en 7 días (máx. `UNFOLLOW_PER_WEEK`; las de `X_NEVER_UNFOLLOW` jamás se tocan).
-- **Comentar**: en cada ciclo redacta respuestas con tu voz a posts con tracción de las cuentas vigiladas — llegan a Telegram como "💬 Respuesta propuesta" y solo se publican si las apruebas.
-- ⚠️ Los topes existen porque X suspende cuentas por follow churn y comentarios masivos automatizados. No los subas de golpe.
+- **Seguir**: hasta **100/día** en 4 tandas (8h, 12h, 16h, 20h) de `FOLLOW_BATCH=25`, con pausas aleatorias de 30-60s entre follows. Descubre cuentas del nicho con engagement real (filtra bots: mín. 500 seguidores) y te avisa por Telegram.
+- **Dejar de seguir**: limpieza diaria en dosis pequeñas (`UNFOLLOW_BATCH=7`), máx. **50/semana** (`UNFOLLOW_PER_WEEK`), solo cuentas sin follow-back tras 7 días; las de `X_NEVER_UNFOLLOW` jamás se tocan.
+- **Comentar**: en cada ciclo redacta respuestas con tu voz a posts con tracción — llegan a Telegram como "💬 Respuesta propuesta" y solo se publican si las apruebas.
+- ⚠️ **Por qué no más**: el límite técnico de X es 400 follows/día, pero X banea por *patrón* (ráfagas >30-50/hora, follow-churn, automatización), no por un número fijo. 100/día espaciados es el techo que recomiendan las guías de crecimiento sin disparar el anti-spam. Subirlo es jugar a la ruleta con tu cuenta.
 
 ## Setup (15 min)
 
