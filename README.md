@@ -35,8 +35,8 @@ flowchart LR
     LLM -.reprograma.-> S
 
     subgraph Growth
-        G1[descubre cuentas afines] --> G2[sigue 25/día<br/>en 4 tandas]
-        G3[prune sin follow-back<br/>50/semana]
+        G1[descubre cuentas afines] --> G2[sigue 15/día<br/>en 4 tandas]
+        G3[prune sin follow-back<br/>30/semana]
         G4[💬 respuestas con tu voz<br/>siempre con tu ✅]
     end
 ```
@@ -86,10 +86,11 @@ python -m src.main     # ciclo de prueba al iniciar
 | `X_BEARER_TOKEN` | — | Leer cuentas, tendencias y métricas |
 | `X_ACCOUNTS` | OpenAI, DeepMind… | Cuentas a vigilar (sin `@`, por comas) |
 | `ENABLE_IMAGES` | `false` | Activa nano banana 🍌 |
-| `POSTS_PER_DAY` | `10` | Borradores por ciclo (2 ciclos/día = 20 posts/día) |
-| `FOLLOW_PER_DAY` | `25` | Máx. follows/día (cada uno cuesta $0.015) |
-| `FOLLOW_BATCH` | `7` | Por tanda — 4 tandas: 8h, 12h, 16h, 20h |
-| `UNFOLLOW_PER_WEEK` | `50` | Máx. 50/semana, en dosis de `UNFOLLOW_BATCH=7` |
+| `POSTS_PER_DAY` | `3` | Borradores por ciclo (2 ciclos/día = 6 posts/día) |
+| `IMAGE_RATIO` | `0.5` | Fracción de posts con imagen (0.5 = la mitad) |
+| `FOLLOW_PER_DAY` | `15` | Máx. follows/día (cada uno cuesta $0.015) |
+| `FOLLOW_BATCH` | `4` | Por tanda — 4 tandas: 8h, 12h, 16h, 20h |
+| `UNFOLLOW_PER_WEEK` | `30` | Máx. 30/semana, en dosis de `UNFOLLOW_BATCH=5` |
 | `X_NEVER_UNFOLLOW` | — | Cuentas protegidas para siempre |
 | `MEMORY_ENABLED` | `true` | Memoria de contenido (anti-repetición + learnings) |
 | `CRITIC_THRESHOLD` | `0.8` | Nota mínima del crítico para mandarte el post |
@@ -106,27 +107,27 @@ python -m src.main     # ciclo de prueba al iniciar
 
 ## 📈 Crecimiento (máximo seguro)
 
-- **Seguir**: hasta **25/día** en 4 tandas, con pausas aleatorias de **30-60s** entre follows; filtra bots (mín. 500 followers) y busca engagement real en el nicho
-- **Dejar de seguir**: limpieza diaria en dosis de 7, máx. **50/semana**, solo sin follow-back tras 7 días
+- **Seguir**: hasta **15/día** en 4 tandas, con pausas aleatorias de **30-60s** entre follows; filtra bots (mín. 500 followers) y busca engagement real en el nicho
+- **Dejar de seguir**: limpieza diaria en dosis de 5, máx. **30/semana**, solo sin follow-back tras 7 días
 - **Comentar**: respuestas redactadas con tu voz a posts con tracción → llegan como "💬 Respuesta propuesta" y solo se publican con tu ✅
 
 > [!WARNING]
 > **Coste pay-per-use (2026):** cada follow cuesta $0.015 en la API de X (25/día ≈ $12/mes) y cada post **con link** cuesta $0.20 — por eso el agente nunca pone links en los posts. Subir `FOLLOW_PER_DAY` aumenta coste linealmente y las ráfagas >30-50/hora disparan el anti-spam de X.
 
-## 💰 Coste mensual estimado (configuración actual: 20 posts/día)
+## 💰 Coste mensual estimado (perfil económico actual)
 
 | Concepto | Volumen/mes | Coste |
 |---|---|---|
-| Posts (X API) | 600 × $0.015 | $9 |
+| Posts (X API) | 180 × $0.015 | $3 |
 | Respuestas (4/día) | 120 × $0.015 | $2 |
-| Follows/unfollows (25+7/día) | ~960 × $0.015 | $14 |
-| Lecturas (research + growth + métricas) | ~10.000 | $30–60 |
-| Imágenes nano banana (20/día) | 600 × ~$0.039 | $23 |
-| LLM (Gemini Flash + Pro) | ~10M tokens | $5–10 |
+| Follows/unfollows (15+4/día) | ~570 × $0.015 | $9 |
+| Lecturas (research + growth + métricas) | ~6.000 | $15–30 |
+| Imágenes nano banana (3/día, `IMAGE_RATIO=0.5`) | 90 × ~$0.039 | $4 |
+| LLM (Gemini Flash + Pro) | ~4M tokens | $3–6 |
 | Infra (Railway) | — | $5 |
-| **Total** | | **~$88–123/mes** |
+| **Total** | | **~$41–59/mes** |
 
-Los dos mayores drivers son las **lecturas del growth** y las **imágenes**. Configuración económica real (~$35-45/mes): `POSTS_PER_DAY=3`, `FOLLOW_PER_DAY=15`, imágenes solo en 1 de cada 2 posts.
+**Perfil agresivo** (si el engagement lo justifica): `POSTS_PER_DAY=10` + `FOLLOW_PER_DAY=25` + `IMAGE_RATIO=1.0` → ~$88–123/mes. Los dos mayores drivers de coste son las **lecturas del growth** y las **imágenes**.
 
 ## ☁️ Deploy en Railway (24/7)
 
@@ -138,7 +139,7 @@ VPS alternativo: `docker build -t zanax . && docker run --env-file .env zanax`
 
 ## 🗺️ Roadmap
 
-- [x] Grafo research → select → image → draft → critic
+- [x] Grafo research → select → image → draft
 - [x] Imágenes nano banana 🍌
 - [x] Timing aprendido con LLM
 - [x] Growth: follow/unfollow/comentarios con límites seguros
