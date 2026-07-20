@@ -35,7 +35,7 @@ flowchart LR
     LLM -.reprograma.-> S
 
     subgraph Growth
-        G1[descubre cuentas afines] --> G2[sigue 100/día<br/>en 4 tandas]
+        G1[descubre cuentas afines] --> G2[sigue 25/día<br/>en 4 tandas]
         G3[prune sin follow-back<br/>50/semana]
         G4[💬 respuestas con tu voz<br/>siempre con tu ✅]
     end
@@ -87,8 +87,8 @@ python -m src.main     # ciclo de prueba al iniciar
 | `X_ACCOUNTS` | OpenAI, DeepMind… | Cuentas a vigilar (sin `@`, por comas) |
 | `ENABLE_IMAGES` | `false` | Activa nano banana 🍌 |
 | `POSTS_PER_DAY` | `2` | Borradores por ciclo |
-| `FOLLOW_PER_DAY` | `100` | Máx. follows/día (ver sección siguiente) |
-| `FOLLOW_BATCH` | `25` | Por tanda — 4 tandas: 8h, 12h, 16h, 20h |
+| `FOLLOW_PER_DAY` | `25` | Máx. follows/día (cada uno cuesta $0.015) |
+| `FOLLOW_BATCH` | `7` | Por tanda — 4 tandas: 8h, 12h, 16h, 20h |
 | `UNFOLLOW_PER_WEEK` | `50` | Máx. 50/semana, en dosis de `UNFOLLOW_BATCH=7` |
 | `X_NEVER_UNFOLLOW` | — | Cuentas protegidas para siempre |
 | `MEMORY_ENABLED` | `true` | Memoria de contenido (anti-repetición + learnings) |
@@ -106,12 +106,12 @@ python -m src.main     # ciclo de prueba al iniciar
 
 ## 📈 Crecimiento (máximo seguro)
 
-- **Seguir**: hasta **100/día** en 4 tandas, con pausas aleatorias de **30-60s** entre follows; filtra bots (mín. 500 followers) y busca engagement real en el nicho
+- **Seguir**: hasta **25/día** en 4 tandas, con pausas aleatorias de **30-60s** entre follows; filtra bots (mín. 500 followers) y busca engagement real en el nicho
 - **Dejar de seguir**: limpieza diaria en dosis de 7, máx. **50/semana**, solo sin follow-back tras 7 días
 - **Comentar**: respuestas redactadas con tu voz a posts con tracción → llegan como "💬 Respuesta propuesta" y solo se publican con tu ✅
 
 > [!WARNING]
-> El límite técnico de X es 400 follows/día, pero **X banea por patrón (ráfagas >30-50/hora, follow-churn), no por número**. 100/día espaciados es el techo recomendado por las guías de crecimiento. Subirlo es jugar a la ruleta con tu cuenta.
+> **Coste pay-per-use (2026):** cada follow cuesta $0.015 en la API de X (25/día ≈ $12/mes) y cada post **con link** cuesta $0.20 — por eso el agente nunca pone links en los posts. Subir `FOLLOW_PER_DAY` aumenta coste linealmente y las ráfagas >30-50/hora disparan el anti-spam de X.
 
 ## ☁️ Deploy en Railway (24/7)
 
