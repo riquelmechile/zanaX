@@ -9,10 +9,10 @@ import operator
 import os
 from typing import Annotated, TypedDict
 
-from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 
 from .images import enabled as images_enabled, generate_image
+from .llm import get_llm
 from .style import SYSTEM_PROMPT
 from .tools import gather_trends, web_search
 from .x_research import fetch_account_posts
@@ -25,13 +25,9 @@ class AgentState(TypedDict, total=False):
     error: str
 
 
-_llm = None
-
-def llm() -> ChatOpenAI:
-    global _llm
-    if _llm is None:
-        _llm = ChatOpenAI(model=os.getenv("LLM_MODEL", "gpt-4o-mini"), temperature=0.8)
-    return _llm
+def llm(role: str = "cheap"):
+    """Compat: devuelve el LLM del rol ('cheap' | 'draft')."""
+    return get_llm(role)
 
 
 # ---------- NODOS ----------
@@ -101,9 +97,10 @@ def draft_node(state: AgentState) -> AgentState:
             "ser más corto porque la imagen comunica parte del mensaje).\n\n"
             "Escribe el post:"
         )
-        text = llm().invoke(prompt).content.strip()
+        text = llm("draft").invoke(prompt).content.strip()
         if text and text != "SKIP" and len(text) <= 280:
             drafts.append({
+                "type": "post",
                 "text": text,
                 "source_url": c["url"],
                 "topic": c["title"],

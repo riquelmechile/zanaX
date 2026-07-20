@@ -2,7 +2,7 @@
 
 Flujo: el agente envía cada borrador con botones ✅ Publicar / ❌ Descartar /
 ✏️ (el usuario responde citando el mensaje con el texto corregido).
-Cada publicación queda registrada en timing para el análisis de horarios.
+Soporta posts nuevos y respuestas (type=reply) a posts de terceros.
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from telegram.ext import (Application, CallbackQueryHandler, CommandHandler,
                           ContextTypes, MessageHandler, filters)
 
 from . import x_client
-from .agent import timing
+from .agent import growth, timing
 
 PENDING: dict[int, dict] = {}  # message_id -> draft
 _chat_id = None
@@ -34,7 +34,8 @@ async def send_draft(app: Application, draft: dict):
         InlineKeyboardButton("✅ Publicar", callback_data="approve"),
         InlineKeyboardButton("❌ Descartar", callback_data="reject"),
     ]])
-    caption = (f"📝 *Borrador* ({len(draft['text'])} caracteres)\n\n{draft['text']}\n\n"
+    kind = "💬 *Respuesta propuesta*" if draft.get("type") == "reply" else "📝 *Borrador*"
+    caption = (f"{kind} ({len(draft['text'])} caracteres)\n\n{draft['text']}\n\n"
                f"🔗 Fuente: {draft['source_url']}\n"
                "_(responde citando este mensaje para publicar una versión editada)_")
     if draft.get("image"):
@@ -59,8 +60,12 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_reply_markup(reply_markup=None)
         return
     if q.data == "approve":
-        tweet_id = x_client.publish(draft["text"], draft.get("image"))
-        timing.record_publish(tweet_id, draft["text"], bool(draft.get("image")))
+        if draft.get("type") == "reply":
+            tweet_id = x_client.reply(draft["text"], draft["in_reply_to"])
+            growth.mark_commented(draft["in_reply_to"])
+        else:
+            tweet_id = x_client.publish(draft["text"], draft.get("image"))
+            timing.record_publish(tweet_id, draft["text"], bool(draft.get("image")))
         await q.edit_message_text(f"✅ Publicado (id: {tweet_id})\n\n{draft['text']}")
     else:
         await q.edit_message_text(f"❌ Descartado\n\n{draft['text']}")
@@ -73,8 +78,12 @@ async def on_edit_reply(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
     orig = PENDING.pop(msg.reply_to_message.message_id, None)
     if orig and msg.text and len(msg.text) <= 280:
-        tweet_id = x_client.publish(msg.text, orig.get("image"))
-        timing.record_publish(tweet_id, msg.text, bool(orig.get("image")))
+        if orig.get("type") == "reply":
+            tweet_id = x_client.reply(msg.text, orig["in_reply_to"])
+            growth.mark_commented(orig["in_reply_to"])
+        else:
+            tweet_id = x_client.publish(msg.text, orig.get("image"))
+            timing.record_publish(tweet_id, msg.text, bool(orig.get("image")))
         await msg.reply_text(f"✅ Publicada versión editada (id: {tweet_id})")
     elif orig:
         await msg.reply_text("⚠️ Texto vacío o >280 caracteres, no se publicó.")
