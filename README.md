@@ -21,15 +21,17 @@ flowchart LR
     subgraph Research
         A[HN · GitHub · Reddit] --> R
         B[Cuentas clave de X] --> R
+        M2[Servidores MCP<br/>arXiv · Product Hunt] --> R
     end
-    R[research] --> S[select<br/>Gemini Flash]
+    R[research] --> S[select<br/>Gemini Flash<br/>+ memoria anti-repetición]
     S --> I[image<br/>🍌 nano banana]
-    I --> D[draft<br/>Gemini Pro + tu voz]
-    D --> T{Telegram<br/>✅ / ❌ / ✏️}
+    I --> D[draft<br/>Gemini Pro + tu voz<br/>+ learnings reales]
+    D --> C[critic<br/>rúbrica + top posts<br/>reescribe si < 0.8]
+    C --> T{Telegram<br/>✅ / ❌ / ✏️}
     T -->|aprobado| P[publish<br/>X API]
     T -->|descartado| X[🗑️]
-    P --> M[(métricas)]
-    M -->|cada lunes| LLM[LLM re-aprende<br/>tus mejores horas]
+    P --> M[(métricas + memoria)]
+    M -->|cada lunes| LLM[LLM re-aprende<br/>horarios y lecciones]
     LLM -.reprograma.-> S
 
     subgraph Growth
@@ -44,11 +46,14 @@ flowchart LR
 | Módulo | Qué hace | Archivo |
 |---|---|---|
 | **Research** | Tendencias de HN, GitHub Trending, Reddit y DuckDuckGo News | `src/agent/tools.py` |
+| **MCP Sources** | Fuentes extra vía **Model Context Protocol** (arXiv, Product Hunt…) configurables en `MCP_SERVERS` | `src/agent/mcp_sources.py` |
 | **X Research** | Lee cuentas que publican a diario (`X_ACCOUNTS`), rankeadas por engagement | `src/agent/x_research.py` |
 | **LLM multi-provider** | Gemini Flash (análisis) + Gemini Pro (redacción); conmutable a OpenAI/Claude | `src/agent/llm.py` |
 | **Imágenes** | nano banana (`gemini-2.5-flash-image`), generadas antes de redactar | `src/agent/images.py` |
 | **Tu voz** | Guía de estilo + few-shot con tus tuits reales | `src/agent/style.py` |
-| **Grafo** | research → select → image → draft | `src/agent/graph.py` |
+| **Grafo** | research → select → image → draft → **critic** | `src/agent/graph.py` |
+| **Crítico** | Puntúa contra rúbrica + tus posts top históricos (modelo distinto al redactor); reescribe si < `CRITIC_THRESHOLD` | `src/agent/critic.py` |
+| **Memoria** | Temas cubiertos (anti-repetición) + lecciones semanales de tu engagement real | `src/agent/memory.py` |
 | **Timing** | Aprende tus mejores horas con tu engagement real; reprograma el scheduler | `src/agent/timing.py` |
 | **Growth** | Descubre/afines, follow/unfollow con límites seguros, respuestas con aprobación | `src/agent/growth.py` |
 | **Aprobación** | Bot de Telegram: ✅ publica · ❌ descarta · cita el mensaje para editar | `src/approval.py` |
@@ -86,14 +91,18 @@ python -m src.main     # ciclo de prueba al iniciar
 | `FOLLOW_BATCH` | `25` | Por tanda — 4 tandas: 8h, 12h, 16h, 20h |
 | `UNFOLLOW_PER_WEEK` | `50` | Máx. 50/semana, en dosis de `UNFOLLOW_BATCH=7` |
 | `X_NEVER_UNFOLLOW` | — | Cuentas protegidas para siempre |
+| `MEMORY_ENABLED` | `true` | Memoria de contenido (anti-repetición + learnings) |
+| `CRITIC_THRESHOLD` | `0.8` | Nota mínima del crítico para mandarte el post |
+| `CRITIC_MAX_RETRIES` | `2` | Reescrituras máximas por borrador |
+| `MCP_SERVERS` | `[]` | JSON con servidores MCP extra (arXiv, Product Hunt…) |
 | `DRY_RUN` | `true` | `true` = no publica nada |
 
-## ⏰ Cómo aprende tus horarios
+## ⏰ Cómo aprende (horarios + contenido)
 
-1. Cada post aprobado se registra (hora, texto, si llevaba imagen) en `DATA_DIR/published.json`
+1. Cada post aprobado se registra (hora, texto, tema, imagen) en `DATA_DIR/`
 2. Un job diario refresca likes/RTs vía X API
-3. Cada lunes, un LLM cruza tu historial con heurísticas del nicho y elige tus 2 mejores horas
-4. El scheduler **se reprograma solo** — sin datos aún: 9:30 y 18:00
+3. Cada lunes, un LLM decide tus 2 mejores horas **y** extrae 3-5 lecciones de qué temas/ganchos rinden más en tu audiencia
+4. El scheduler se reprograma solo y las lecciones se inyectan en la redacción; la memoria evita repetir temas ya cubiertos
 
 ## 📈 Crecimiento (máximo seguro)
 
@@ -114,13 +123,15 @@ VPS alternativo: `docker build -t zanax . && docker run --env-file .env zanax`
 
 ## 🗺️ Roadmap
 
-- [x] Grafo research → select → image → draft
+- [x] Grafo research → select → image → draft → critic
 - [x] Imágenes nano banana 🍌
 - [x] Timing aprendido con LLM
 - [x] Growth: follow/unfollow/comentarios con límites seguros
+- [x] Memoria de temas ya cubiertos (anti-repetición) + learnings de engagement
+- [x] Crítico grounded que reescribe borradores antes de pedir aprobación
+- [x] Fuentes extra vía MCP (arXiv, Product Hunt…)
 - [ ] Hilos (threads) automáticos para tendencias grandes
 - [ ] Dashboard de métricas en Telegram (`/stats`)
-- [ ] Memoria de temas ya cubiertos (anti-repetición)
 
 ## ⚖️ Disclaimer
 
