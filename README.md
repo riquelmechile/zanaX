@@ -86,7 +86,7 @@ python -m src.main     # ciclo de prueba al iniciar
 | `X_BEARER_TOKEN` | — | Leer cuentas, tendencias y métricas |
 | `X_ACCOUNTS` | OpenAI, DeepMind… | Cuentas a vigilar (sin `@`, por comas) |
 | `ENABLE_IMAGES` | `false` | Activa nano banana 🍌 |
-| `POSTS_PER_DAY` | `2` | Borradores por ciclo |
+| `POSTS_PER_DAY` | `10` | Borradores por ciclo (2 ciclos/día = 20 posts/día) |
 | `FOLLOW_PER_DAY` | `25` | Máx. follows/día (cada uno cuesta $0.015) |
 | `FOLLOW_BATCH` | `7` | Por tanda — 4 tandas: 8h, 12h, 16h, 20h |
 | `UNFOLLOW_PER_WEEK` | `50` | Máx. 50/semana, en dosis de `UNFOLLOW_BATCH=7` |
@@ -112,6 +112,21 @@ python -m src.main     # ciclo de prueba al iniciar
 
 > [!WARNING]
 > **Coste pay-per-use (2026):** cada follow cuesta $0.015 en la API de X (25/día ≈ $12/mes) y cada post **con link** cuesta $0.20 — por eso el agente nunca pone links en los posts. Subir `FOLLOW_PER_DAY` aumenta coste linealmente y las ráfagas >30-50/hora disparan el anti-spam de X.
+
+## 💰 Coste mensual estimado (configuración actual: 20 posts/día)
+
+| Concepto | Volumen/mes | Coste |
+|---|---|---|
+| Posts (X API) | 600 × $0.015 | $9 |
+| Respuestas (4/día) | 120 × $0.015 | $2 |
+| Follows/unfollows (25+7/día) | ~960 × $0.015 | $14 |
+| Lecturas (research + growth + métricas) | ~10.000 | $30–60 |
+| Imágenes nano banana (20/día) | 600 × ~$0.039 | $23 |
+| LLM (Gemini Flash + Pro) | ~10M tokens | $5–10 |
+| Infra (Railway) | — | $5 |
+| **Total** | | **~$88–123/mes** |
+
+Los dos mayores drivers son las **lecturas del growth** y las **imágenes**. Configuración económica real (~$35-45/mes): `POSTS_PER_DAY=3`, `FOLLOW_PER_DAY=15`, imágenes solo en 1 de cada 2 posts.
 
 ## ☁️ Deploy en Railway (24/7)
 
