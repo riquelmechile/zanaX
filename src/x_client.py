@@ -37,3 +37,11 @@ def publish(text: str, image_path: str | None = None) -> str:
         media_ids = [mid] if mid else None
     resp = _client().create_tweet(text=text, media_ids=media_ids)
     return str(resp.data["id"])
+
+
+def reply(text: str, in_reply_to: str) -> str:
+    """Publica una respuesta a un tuit existente. Respeta DRY_RUN."""
+    if os.getenv("DRY_RUN", "true").lower() == "true":
+        return "dry-run"
+    resp = _client().create_tweet(text=text, in_reply_to_tweet_id=in_reply_to)
+    return str(resp.data["id"])
