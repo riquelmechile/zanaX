@@ -1,28 +1,37 @@
 # zanaX 🤖🍌
 
-> Agente autónomo de X que investiga tendencias de AI/dev cada día, escribe posts con tu propia voz, genera imágenes con nano banana (Gemini) y te pide aprobación por Telegram antes de publicar. Construido con LangGraph.
+> Agente autónomo de X que investiga tendencias de AI/dev cada día (incluidas cuentas clave dentro de X), escribe posts con tu propia voz, genera imágenes con nano banana (Gemini), aprende tus mejores horarios de publicación con un LLM y te pide aprobación por Telegram antes de publicar. Construido con LangGraph.
 
 ## Arquitectura (grafo LangGraph)
 
 ```
-research ──► select ──► draft ──► image ──► [aprobación Telegram] ──► publish (X API)
+research ──► select ──► image ──► draft ──► [aprobación Telegram] ──► publish (X API)
    │            │          │         │              │                       │
-HN+GitHub   LLM elige   LLM con   nano banana   Botones ✅/❌/✏️        tweepy v2
-+Reddit     lo mejor    tu estilo  (opcional)    en tu chat          (o DRY_RUN)
+HN+GitHub   LLM elige  nano banana  LLM con   Botones ✅/❌/✏️        tweepy v2
++Reddit+X   lo mejor   (opcional)  tu estilo   en tu chat          (o DRY_RUN)
 ```
 
 - `src/agent/tools.py` — fuentes: Hacker News API, GitHub Trending RSS, Reddit JSON, DuckDuckGo News.
+- `src/agent/x_research.py` — lee las cuentas de X que publican a diario (configurables en `X_ACCOUNTS`) y las convierte en tendencias rankeadas por engagement.
+- `src/agent/timing.py` — **timing inteligente**: registra cada post publicado, refresca sus métricas a diario y un LLM re-analiza cada lunes cuáles son tus mejores horas; el scheduler se reprograma solo.
 - `src/agent/style.py` — **tu voz**: guía de estilo + few-shot con tuits tuyos. Edítalo primero.
 - `src/agent/images.py` — generación de imágenes con **nano banana** (`gemini-2.5-flash-image`). Opcional, se activa con `ENABLE_IMAGES=true`.
-- `src/agent/graph.py` — grafo LangGraph (research → select → draft → image).
-- `src/approval.py` — bot de Telegram: envía el borrador (con imagen si la hay); ✅ publica, ❌ descarta, o responde citando el mensaje con tu versión editada.
+- `src/agent/graph.py` — grafo LangGraph (research → select → image → draft).
+- `src/approval.py` — bot de Telegram: envía el borrador (con imagen si la hay); ✅ publica, ❌ descarta, o responde citando el mensaje con tu versión editada. Cada publicación queda registrada para el análisis de timing.
 - `src/x_client.py` — publicación con X API v2 (sube imagen vía media upload). `DRY_RUN=true` = modo prueba.
-- `src/main.py` — scheduler (9:30 y 18:00 por defecto) + polling de Telegram en un solo proceso.
+- `src/main.py` — scheduler **dinámico** (horas aprendidas por el LLM) + polling de Telegram en un solo proceso.
+
+## Cómo aprende los horarios
+
+1. Cada vez que apruebas un post se guarda en `DATA_DIR/published.json` (hora, texto, si llevaba imagen).
+2. Un job diario consulta likes/RTs de esos posts vía X API (`X_BEARER_TOKEN`).
+3. Cada lunes un LLM cruza ese historial con heurísticas del nicho AI/dev y decide las 2 mejores horas; el scheduler se reconfigura solo.
+4. Sin datos todavía → usa heurísticas (9:30 y 18:00).
 
 ## Setup (15 min)
 
 1. **Telegram**: crea bot con [@BotFather](https://t.me/BotFather) (token) y obtén tu `chat_id` con [@userinfobot](https://t.me/userinfobot).
-2. **X API**: cuenta en [developer.x.com](https://developer.x.com), plan **Basic** (necesario para postear). App con permisos Read & Write y copia las 4 claves.
+2. **X API**: cuenta en [developer.x.com](https://developer.x.com), plan **Basic** (necesario para postear). App con permisos Read & Write y copia las 4 claves + el **Bearer Token** (para investigar cuentas y métricas).
 3. **OpenAI**: API key (o cambia `ChatOpenAI` por otro provider en `graph.py`).
 4. **Imágenes (opcional)**: API key gratis en [Google AI Studio](https://aistudio.google.com/apikey) y pon `ENABLE_IMAGES=true`.
 5. **Tu estilo**: edita `src/agent/style.py` → pon 3-5 tuits reales tuyos en `MY_TWEETS`.
