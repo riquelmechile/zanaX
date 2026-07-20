@@ -12,3 +12,4 @@ pydantic>=2.7
 python-dotenv>=1.0.1
 duckduckgo-search>=6.2.0
 google-genai>=1.0.0
+langchain-mcp-adapters>=0.1.0
