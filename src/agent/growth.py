@@ -1,9 +1,10 @@
 """Crecimiento en X: descubrir cuentas afines, seguir, dejar de seguir, comentar.
 
-LÍMITES DUROS (anti-suspensión de X):
-- Seguir: máx. FOLLOW_PER_DAY/día (def. 10)
-- Dejar de seguir: máx. UNFOLLOW_PER_WEEK/semana (def. 5) y nunca cuentas en
-  whitelist (X_NEVER_UNFOLLOW)
+LÍMITES (máximo seguro — X banea por PATRÓN, no por número):
+- Seguir: máx. FOLLOW_PER_DAY/día (def. 100) en tandas de FOLLOW_BATCH (def. 25)
+  con pausas aleatorias de 30-60s entre follows (anti-ráfagas)
+- Dejar de seguir: máx. UNFOLLOW_PER_WEEK/semana (def. 50) en dosis diarias de
+  UNFOLLOW_BATCH (def. 7) y nunca cuentas en whitelist (X_NEVER_UNFOLLOW)
 - Comentarios: SIEMPRE pasan por aprobación en Telegram; el agente solo redacta
 
 Requiere X_BEARER_TOKEN (lectura) y las 4 claves OAuth1 (acciones).
@@ -13,6 +14,8 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import random
+import time
 from datetime import datetime, timedelta, timezone
 
 DATA_DIR = pathlib.Path(os.getenv("DATA_DIR", "/tmp/zanax-data"))
@@ -104,10 +107,16 @@ def discover_accounts(limit: int = 20) -> list[dict]:
 # ---------- SEGUIR / DEJAR DE SEGUIR ----------
 
 def follow_top(limit: int | None = None) -> list[str]:
-    """Sigue las mejores cuentas descubiertas, respetando el tope diario."""
-    cap = limit or int(os.getenv("FOLLOW_PER_DAY", "10"))
+    """Sigue las mejores cuentas descubiertas, respetando el tope diario.
+
+    Pausas aleatorias de 30-60s entre follows: las ráfagas (>30-50/hora) son
+    la señal #1 que detecta el anti-spam de X. El scheduler llama a esta
+    función varias veces al día con tandas pequeñas.
+    """
+    cap = limit or int(os.getenv("FOLLOW_PER_DAY", "100"))
+    batch = int(os.getenv("FOLLOW_BATCH", "25"))
     data = _load()
-    remaining = cap - _count_today(data["follows"])
+    remaining = min(batch, cap - _count_today(data["follows"]))
     if remaining <= 0:
         return []
     followed = []
@@ -125,6 +134,7 @@ def follow_top(limit: int | None = None) -> list[str]:
                     "at": datetime.now(timezone.utc).isoformat(),
                 })
                 followed.append(acc["handle"])
+                time.sleep(random.uniform(30, 60))
             except Exception:
                 continue
         _save(data)
@@ -136,13 +146,16 @@ def follow_top(limit: int | None = None) -> list[str]:
 def prune_following() -> list[str]:
     """Deja de seguir cuentas que no devolvieron el follow tras 7 días.
 
-    Conservador: tope semanal y nunca toca la whitelist X_NEVER_UNFOLLOW.
+    Conservador: tope semanal en dosis diarias y nunca toca la whitelist
+    X_NEVER_UNFOLLOW.
     """
-    cap = int(os.getenv("UNFOLLOW_PER_WEEK", "5"))
+    cap = int(os.getenv("UNFOLLOW_PER_WEEK", "50"))
+    batch = int(os.getenv("UNFOLLOW_BATCH", "7"))  # dosis diaria
     never = {h.strip().lstrip("@").lower()
              for h in os.getenv("X_NEVER_UNFOLLOW", "").split(",") if h.strip()}
     data = _load()
-    if _count_today(data["unfollows"], days=7) >= cap:
+    remaining = min(batch, cap - _count_today(data["unfollows"], days=7))
+    if remaining <= 0:
         return []
     cutoff = datetime.now(timezone.utc) - timedelta(days=7)
     unfollowed = []
@@ -156,7 +169,7 @@ def prune_following() -> list[str]:
             fans.add(str(u.id))
         still = []
         for f in data["follows"]:
-            if len(unfollowed) >= cap:
+            if len(unfollowed) >= remaining:
                 still.append(f)
                 continue
             try:
@@ -172,6 +185,7 @@ def prune_following() -> list[str]:
                         "at": datetime.now(timezone.utc).isoformat(),
                     })
                     unfollowed.append(f["handle"])
+                    time.sleep(random.uniform(30, 60))
                     continue
                 except Exception:
                     pass
