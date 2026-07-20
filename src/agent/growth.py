@@ -1,8 +1,8 @@
 """Crecimiento en X: descubrir cuentas afines, seguir, dejar de seguir, comentar.
 
-LÍMITES (máximo seguro — X banea por PATRÓN, no por número):
-- Seguir: máx. FOLLOW_PER_DAY/día (def. 100) en tandas de FOLLOW_BATCH (def. 25)
-  con pausas aleatorias de 30-60s entre follows (anti-ráfagas)
+LÍMITES (uso personal, coste optimizado pay-per-use 2026):
+- Seguir: máx. FOLLOW_PER_DAY/día (def. 25 ≈ $12/mes) en tandas de FOLLOW_BATCH
+  (def. 7) con pausas aleatorias de 30-60s entre follows (anti-ráfagas)
 - Dejar de seguir: máx. UNFOLLOW_PER_WEEK/semana (def. 50) en dosis diarias de
   UNFOLLOW_BATCH (def. 7) y nunca cuentas en whitelist (X_NEVER_UNFOLLOW)
 - Comentarios: SIEMPRE pasan por aprobación en Telegram; el agente solo redacta
@@ -113,8 +113,8 @@ def follow_top(limit: int | None = None) -> list[str]:
     la señal #1 que detecta el anti-spam de X. El scheduler llama a esta
     función varias veces al día con tandas pequeñas.
     """
-    cap = limit or int(os.getenv("FOLLOW_PER_DAY", "100"))
-    batch = int(os.getenv("FOLLOW_BATCH", "25"))
+    cap = limit or int(os.getenv("FOLLOW_PER_DAY", "25"))
+    batch = int(os.getenv("FOLLOW_BATCH", "7"))
     data = _load()
     remaining = min(batch, cap - _count_today(data["follows"]))
     if remaining <= 0:
