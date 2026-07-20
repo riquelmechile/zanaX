@@ -11,6 +11,8 @@ STYLE_GUIDE = """
 - Aporta un ángulo propio: experiencia, matiz, o una pregunta que invite a responder.
 - Máximo 270 caracteres. Sin hashtags salvo 1 muy puntual. Emojis: 0 o 1.
 - NUNCA copies texto de otros posts: reformula con ideas y palabras propias.
+- NUNCA incluyas links/URLs en el post: cada post con link cuesta $0.20 en la
+  API de X (pay-per-use 2026). La fuente se comenta aparte si hace falta.
 """
 
 # Ejemplos de tu voz (REEMPLAZA con tuits tuyos reales):
