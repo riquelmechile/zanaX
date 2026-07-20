@@ -1,70 +1,133 @@
-# zanaX 🤖🍌
+<div align="center">
 
-> Agente autónomo de X que investiga tendencias de AI/dev cada día (incluidas cuentas clave dentro de X), escribe posts con tu propia voz, genera imágenes con nano banana (Gemini), aprende tus mejores horarios de publicación con un LLM, hace crecer tu red con límites seguros y te pide aprobación por Telegram antes de publicar. Construido con LangGraph.
+# 🤖🍌 zanaX
 
-## Arquitectura (grafo LangGraph)
+**Tu cuenta de X creciendo sola en el mundo AI/dev: investiga, escribe con tu voz, genera imágenes y publica en el mejor momento — tú solo apruebas desde Telegram.**
 
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://python.org)
+[![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph-1C3C3C)](https://langchain-ai.github.io/langgraph/)
+[![LLM](https://img.shields.io/badge/LLM-Gemini%202.5-8E75B2?logo=google&logoColor=white)](https://ai.google.dev)
+[![Deploy](https://img.shields.io/badge/Deploy-Railway-0B0D0E?logo=railway&logoColor=white)](https://railway.app)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+
+</div>
+
+---
+
+## 🧠 Cómo funciona
+
+```mermaid
+flowchart LR
+    subgraph Research
+        A[HN · GitHub · Reddit] --> R
+        B[Cuentas clave de X] --> R
+    end
+    R[research] --> S[select<br/>Gemini Flash]
+    S --> I[image<br/>🍌 nano banana]
+    I --> D[draft<br/>Gemini Pro + tu voz]
+    D --> T{Telegram<br/>✅ / ❌ / ✏️}
+    T -->|aprobado| P[publish<br/>X API]
+    T -->|descartado| X[🗑️]
+    P --> M[(métricas)]
+    M -->|cada lunes| LLM[LLM re-aprende<br/>tus mejores horas]
+    LLM -.reprograma.-> S
+
+    subgraph Growth
+        G1[descubre cuentas afines] --> G2[sigue 100/día<br/>en 4 tandas]
+        G3[prune sin follow-back<br/>50/semana]
+        G4[💬 respuestas con tu voz<br/>siempre con tu ✅]
+    end
 ```
-research ──► select ──► image ──► draft ──► [aprobación Telegram] ──► publish (X API)
-   │            │          │         │              │                       │
-HN+GitHub   LLM elige  nano banana  LLM con   Botones ✅/❌/✏️        tweepy v2
-+Reddit+X   lo mejor   (opcional)  tu estilo   en tu chat          (o DRY_RUN)
-```
 
-- `src/agent/tools.py` — fuentes: Hacker News API, GitHub Trending RSS, Reddit JSON, DuckDuckGo News.
-- `src/agent/x_research.py` — lee las cuentas de X que publican a diario (configurables en `X_ACCOUNTS`) y las convierte en tendencias rankeadas por engagement.
-- `src/agent/timing.py` — **timing inteligente**: registra cada post publicado, refresca sus métricas a diario y un LLM re-analiza cada lunes cuáles son tus mejores horas; el scheduler se reprograma solo.
-- `src/agent/style.py` — **tu voz**: guía de estilo + few-shot con tuits tuyos. Edítalo primero.
-- `src/agent/images.py` — generación de imágenes con **nano banana** (`gemini-2.5-flash-image`). Opcional, se activa con `ENABLE_IMAGES=true`.
-- `src/agent/graph.py` — grafo LangGraph (research → select → image → draft).
-- `src/agent/llm.py` — LLM multi-provider con dos roles: **barato** (`LLM_MODEL`, def. `gemini-2.5-flash`) para selección/análisis y **draft** (`LLM_MODEL_DRAFT`, def. `gemini-2.5-pro`) para redactar posts y comentarios. Provider: `google` (def.), `openai` o `anthropic`.
-- `src/agent/growth.py` — **crecimiento**: descubre cuentas afines al nicho, las sigue (tope `FOLLOW_PER_DAY`, def. 100/día en tandas con pacing), deja de seguir las que no devuelven el follow en 7 días (tope `UNFOLLOW_PER_WEEK`, def. 50/semana + whitelist `X_NEVER_UNFOLLOW`) y redacta respuestas a posts con tracción que **siempre requieren tu ✅ en Telegram**.
-- `src/approval.py` — bot de Telegram: envía borradores y respuestas propuestas (con imagen si la hay); ✅ publica, ❌ descarta, o responde citando el mensaje con tu versión editada. Cada publicación queda registrada para el análisis de timing.
-- `src/x_client.py` — publicación con X API v2 (posts, respuestas e imagen vía media upload). `DRY_RUN=true` = modo prueba.
-- `src/main.py` — scheduler **dinámico** (horas aprendidas por el LLM) + jobs de crecimiento + polling de Telegram en un solo proceso.
+## ✨ Módulos
 
-## Cómo aprende los horarios
+| Módulo | Qué hace | Archivo |
+|---|---|---|
+| **Research** | Tendencias de HN, GitHub Trending, Reddit y DuckDuckGo News | `src/agent/tools.py` |
+| **X Research** | Lee cuentas que publican a diario (`X_ACCOUNTS`), rankeadas por engagement | `src/agent/x_research.py` |
+| **LLM multi-provider** | Gemini Flash (análisis) + Gemini Pro (redacción); conmutable a OpenAI/Claude | `src/agent/llm.py` |
+| **Imágenes** | nano banana (`gemini-2.5-flash-image`), generadas antes de redactar | `src/agent/images.py` |
+| **Tu voz** | Guía de estilo + few-shot con tus tuits reales | `src/agent/style.py` |
+| **Grafo** | research → select → image → draft | `src/agent/graph.py` |
+| **Timing** | Aprende tus mejores horas con tu engagement real; reprograma el scheduler | `src/agent/timing.py` |
+| **Growth** | Descubre/afines, follow/unfollow con límites seguros, respuestas con aprobación | `src/agent/growth.py` |
+| **Aprobación** | Bot de Telegram: ✅ publica · ❌ descarta · cita el mensaje para editar | `src/approval.py` |
+| **Publisher** | Posts, respuestas e imágenes vía X API v2; `DRY_RUN` = modo prueba | `src/x_client.py` |
 
-1. Cada vez que apruebas un post se guarda en `DATA_DIR/published.json` (hora, texto, si llevaba imagen).
-2. Un job diario consulta likes/RTs de esos posts vía X API (`X_BEARER_TOKEN`).
-3. Cada lunes un LLM cruza ese historial con heurísticas del nicho AI/dev y decide las 2 mejores horas; el scheduler se reconfigura solo.
-4. Sin datos todavía → usa heurísticas (9:30 y 18:00).
+## 🚀 Quickstart (15 min)
 
-## Crecimiento automático (al máximo seguro)
-
-- **Seguir**: hasta **100/día** en 4 tandas (8h, 12h, 16h, 20h) de `FOLLOW_BATCH=25`, con pausas aleatorias de 30-60s entre follows. Descubre cuentas del nicho con engagement real (filtra bots: mín. 500 seguidores) y te avisa por Telegram.
-- **Dejar de seguir**: limpieza diaria en dosis pequeñas (`UNFOLLOW_BATCH=7`), máx. **50/semana** (`UNFOLLOW_PER_WEEK`), solo cuentas sin follow-back tras 7 días; las de `X_NEVER_UNFOLLOW` jamás se tocan.
-- **Comentar**: en cada ciclo redacta respuestas con tu voz a posts con tracción — llegan a Telegram como "💬 Respuesta propuesta" y solo se publican si las apruebas.
-- ⚠️ **Por qué no más**: el límite técnico de X es 400 follows/día, pero X banea por *patrón* (ráfagas >30-50/hora, follow-churn, automatización), no por un número fijo. 100/día espaciados es el techo que recomiendan las guías de crecimiento sin disparar el anti-spam. Subirlo es jugar a la ruleta con tu cuenta.
-
-## Setup (15 min)
-
-1. **Telegram**: crea bot con [@BotFather](https://t.me/BotFather) (token) y obtén tu `chat_id` con [@userinfobot](https://t.me/userinfobot).
-2. **X API**: cuenta en [developer.x.com](https://developer.x.com), plan **Basic** (necesario para postear). App con permisos Read & Write y copia las 4 claves + el **Bearer Token** (para investigar cuentas y métricas).
-3. **LLM**: por defecto **Gemini** — usa la misma `GOOGLE_API_KEY` del paso 4 y no necesitas nada más. Para OpenAI o Claude cambia `LLM_PROVIDER` y añade su key.
-4. **Imágenes (opcional)**: API key gratis en [Google AI Studio](https://aistudio.google.com/apikey) y pon `ENABLE_IMAGES=true`.
-5. **Tu estilo**: edita `src/agent/style.py` → pon 3-5 tuits reales tuyos en `MY_TWEETS`.
+1. **Telegram** → bot con [@BotFather](https://t.me/BotFather) + tu `chat_id` con [@userinfobot](https://t.me/userinfobot)
+2. **X API** → [developer.x.com](https://developer.x.com) plan Basic: 4 claves OAuth + Bearer Token
+3. **Google** → key gratis en [AI Studio](https://aistudio.google.com/apikey) (LLM + nano banana con la misma key)
+4. **Tu voz** → pon 3-5 tuits tuyos en `src/agent/style.py`
+5. **Arranca**:
 
 ```bash
 cp .env.example .env   # rellena las claves
 pip install -r requirements.txt
-python -m src.main     # arranca; ejecuta un ciclo de prueba al iniciar
+python -m src.main     # ciclo de prueba al iniciar
 ```
 
-Con `DRY_RUN=true` recibirás los borradores en Telegram sin publicar nada.
-Cuando te gusten, pon `DRY_RUN=false`.
+> [!WARNING]
+> Arranca siempre con `DRY_RUN=true`: recibirás los borradores en Telegram sin publicar nada. Cuando la voz te convenza, pon `DRY_RUN=false`.
 
-## Deploy en Railway (24/7)
+## ⚙️ Configuración
 
-1. En Railway: **New Project → Deploy from GitHub repo** (detecta el `Dockerfile` solo).
-2. En **Variables**, pega todas las de `.env`.
-3. Listo: el scheduler corre en la nube y te llegan borradores al móvil.
+| Variable | Default | Para qué |
+|---|---|---|
+| `LLM_PROVIDER` | `google` | `google` · `openai` · `anthropic` |
+| `LLM_MODEL` | `gemini-2.5-flash` | Tareas baratas: selección, prompts, timing |
+| `LLM_MODEL_DRAFT` | `gemini-2.5-pro` | Redacción de posts y comentarios |
+| `X_BEARER_TOKEN` | — | Leer cuentas, tendencias y métricas |
+| `X_ACCOUNTS` | OpenAI, DeepMind… | Cuentas a vigilar (sin `@`, por comas) |
+| `ENABLE_IMAGES` | `false` | Activa nano banana 🍌 |
+| `POSTS_PER_DAY` | `2` | Borradores por ciclo |
+| `FOLLOW_PER_DAY` | `100` | Máx. follows/día (ver sección siguiente) |
+| `FOLLOW_BATCH` | `25` | Por tanda — 4 tandas: 8h, 12h, 16h, 20h |
+| `UNFOLLOW_PER_WEEK` | `50` | Máx. 50/semana, en dosis de `UNFOLLOW_BATCH=7` |
+| `X_NEVER_UNFOLLOW` | — | Cuentas protegidas para siempre |
+| `DRY_RUN` | `true` | `true` = no publica nada |
 
-Alternativa VPS: `docker build -t zanax . && docker run --env-file .env zanax`
+## ⏰ Cómo aprende tus horarios
 
-## Consejos para crecer (lo que el agente no hace solo)
+1. Cada post aprobado se registra (hora, texto, si llevaba imagen) en `DATA_DIR/published.json`
+2. Un job diario refresca likes/RTs vía X API
+3. Cada lunes, un LLM cruza tu historial con heurísticas del nicho y elige tus 2 mejores horas
+4. El scheduler **se reprograma solo** — sin datos aún: 9:30 y 18:00
 
-- El agente te da munición; el crecimiento real viene de **responder y conectar** con cuentas grandes del nicho AI/dev.
-- Revisa los borradores y edítalos a menudo al principio: cada edición tuya es un ejemplo más para `MY_TWEETS`.
-- Los posts con imagen suelen tener más alcance: activa `ENABLE_IMAGES` cuando tengas la key de Google.
-- Constancia > viralidad: 1-2 posts diarios con opinión propia durante meses.
+## 📈 Crecimiento (máximo seguro)
+
+- **Seguir**: hasta **100/día** en 4 tandas, con pausas aleatorias de **30-60s** entre follows; filtra bots (mín. 500 followers) y busca engagement real en el nicho
+- **Dejar de seguir**: limpieza diaria en dosis de 7, máx. **50/semana**, solo sin follow-back tras 7 días
+- **Comentar**: respuestas redactadas con tu voz a posts con tracción → llegan como "💬 Respuesta propuesta" y solo se publican con tu ✅
+
+> [!WARNING]
+> El límite técnico de X es 400 follows/día, pero **X banea por patrón (ráfagas >30-50/hora, follow-churn), no por número**. 100/día espaciados es el techo recomendado por las guías de crecimiento. Subirlo es jugar a la ruleta con tu cuenta.
+
+## ☁️ Deploy en Railway (24/7)
+
+1. **New Project → Deploy from GitHub repo** (detecta el `Dockerfile` solo)
+2. En **Variables**, pega todo tu `.env`
+3. Listo: corre 24/7 y te llegan los borradores al móvil
+
+VPS alternativo: `docker build -t zanax . && docker run --env-file .env zanax`
+
+## 🗺️ Roadmap
+
+- [x] Grafo research → select → image → draft
+- [x] Imágenes nano banana 🍌
+- [x] Timing aprendido con LLM
+- [x] Growth: follow/unfollow/comentarios con límites seguros
+- [ ] Hilos (threads) automáticos para tendencias grandes
+- [ ] Dashboard de métricas en Telegram (`/stats`)
+- [ ] Memoria de temas ya cubiertos (anti-repetición)
+
+## ⚖️ Disclaimer
+
+Automatización responsable: respeta las [reglas de la plataforma X](https://help.x.com/rules-and-policies/platform-rules). Los límites de este repo existen para proteger tu cuenta — no los subas de golpe. El contenido siempre se reformula con voz propia; nunca copies posts de terceros.
+
+---
+
+<div align="center">
+Hecho con 🧠 + 🍌 · ¿Dudas? Abre un issue
+</div>
