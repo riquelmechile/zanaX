@@ -2,6 +2,7 @@
 
 Flujo: el agente envía cada borrador con botones ✅ Publicar / ❌ Descartar /
 ✏️ (el usuario responde citando el mensaje con el texto corregido).
+Cada publicación queda registrada en timing para el análisis de horarios.
 """
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ from telegram.ext import (Application, CallbackQueryHandler, CommandHandler,
                           ContextTypes, MessageHandler, filters)
 
 from . import x_client
+from .agent import timing
 
 PENDING: dict[int, dict] = {}  # message_id -> draft
 _chat_id = None
@@ -58,6 +60,7 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
     if q.data == "approve":
         tweet_id = x_client.publish(draft["text"], draft.get("image"))
+        timing.record_publish(tweet_id, draft["text"], bool(draft.get("image")))
         await q.edit_message_text(f"✅ Publicado (id: {tweet_id})\n\n{draft['text']}")
     else:
         await q.edit_message_text(f"❌ Descartado\n\n{draft['text']}")
@@ -71,6 +74,7 @@ async def on_edit_reply(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     orig = PENDING.pop(msg.reply_to_message.message_id, None)
     if orig and msg.text and len(msg.text) <= 280:
         tweet_id = x_client.publish(msg.text, orig.get("image"))
+        timing.record_publish(tweet_id, msg.text, bool(orig.get("image")))
         await msg.reply_text(f"✅ Publicada versión editada (id: {tweet_id})")
     elif orig:
         await msg.reply_text("⚠️ Texto vacío o >280 caracteres, no se publicó.")

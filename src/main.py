@@ -1,6 +1,8 @@
-"""Entrypoint: scheduler diario + bot de Telegram (polling) en un solo proceso.
+"""Entrypoint: scheduler dinámico + bot de Telegram (polling) en un proceso.
 
-Despliegue: un solo servicio en Railway / VPS / cualquier runner Python.
+El scheduler NO es fijo: usa las horas que el módulo de timing ha aprendido
+(LLM + engagement propio) y se reconfigura cada semana. Un job diario refresca
+métricas de los posts publicados para alimentar ese análisis.
 """
 from __future__ import annotations
 
@@ -12,12 +14,13 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from dotenv import load_dotenv
 
-from src.agent.graph import graph
+from src.agent.graph import graph, llm
+from src.agent import timing
 from src.approval import build_app, send_draft
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-log = logging.getLogger("x-ai-agent")
+log = logging.getLogger("zanax")
 
 
 async def run_agent(app):
@@ -35,12 +38,28 @@ async def run_agent(app):
         log.exception("Error en el ciclo del agente")
 
 
+def schedule_posts(scheduler: AsyncIOScheduler, app):
+    """(Re)programa los ciclos del agente según las mejores horas aprendidas."""
+    scheduler.remove_all_jobs()
+    for i, hour in enumerate(timing.current_hours()):
+        scheduler.add_job(run_agent, CronTrigger(hour=hour, minute=30 if i == 0 else 0),
+                          args=[app], id=f"post_{hour}")
+    log.info("Ciclos programados a las horas: %s", timing.current_hours())
+    # Job diario: refresca métricas de engagement
+    scheduler.add_job(lambda: timing.refresh_metrics(), CronTrigger(hour=7),
+                      id="metrics")
+    # Job semanal (lunes): el LLM re-analiza y reprograma los horarios
+    def retrain():
+        hours = timing.analyze_best_hours(llm())
+        log.info("Timing actualizado por LLM: %s", hours)
+        schedule_posts(scheduler, app)
+    scheduler.add_job(retrain, CronTrigger(day_of_week="mon", hour=8), id="retrain")
+
+
 async def main():
     app = build_app()
     scheduler = AsyncIOScheduler(timezone=os.getenv("TIMEZONE", "Europe/Madrid"))
-    # Dos ventanas de publicación: mañana y tarde (ajusta a tu audiencia)
-    scheduler.add_job(run_agent, CronTrigger(hour=9, minute=30), args=[app])
-    scheduler.add_job(run_agent, CronTrigger(hour=18, minute=0), args=[app])
+    schedule_posts(scheduler, app)
     scheduler.start()
 
     async with app:
@@ -48,9 +67,7 @@ async def main():
         await app.updater.start_polling()
         log.info("Bot de Telegram escuchando. Scheduler activo (DRY_RUN=%s).",
                  os.getenv("DRY_RUN", "true"))
-        # Ejecuta un ciclo al arrancar para probar el pipeline
-        await run_agent(app)
-        # Mantener vivo
+        await run_agent(app)  # ciclo de prueba al arrancar
         await asyncio.Event().wait()
 
 
