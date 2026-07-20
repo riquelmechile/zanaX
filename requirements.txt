@@ -1,0 +1,12 @@
+langgraph>=0.2.60
+langchain-core>=0.3.0
+langchain-openai>=0.2.0
+tweepy>=4.14.0
+python-telegram-bot>=21.0
+apscheduler>=3.10.4
+feedparser>=6.0.11
+httpx>=0.27.0
+pydantic>=2.7
+python-dotenv>=1.0.1
+duckduckgo-search>=6.2.0
+google-genai>=1.0.0
