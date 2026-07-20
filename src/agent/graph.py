@@ -72,10 +72,17 @@ def select_node(state: AgentState) -> AgentState:
 
 
 def image_node(state: AgentState) -> AgentState:
-    """Crea la imagen de cada candidato (nano banana) ANTES de redactar."""
+    """Crea imagen (nano banana) ANTES de redactar, solo en una fracción.
+
+    IMAGE_RATIO (0.0-1.0, def. 0.5): proporción de posts con imagen.
+    Cada imagen cuesta ~$0.039 — el ratio controla el coste mensual.
+    """
     if not images_enabled():
         return {"candidates": state.get("candidates", [])}
-    for c in state.get("candidates", []):
+    ratio = float(os.getenv("IMAGE_RATIO", "0.5"))
+    candidates = state.get("candidates", [])
+    n_images = max(1, round(len(candidates) * ratio)) if candidates else 0
+    for c in candidates[:n_images]:
         prompt_resp = llm().invoke(
             "Escribe un prompt corto EN INGLÉS para generar una imagen editorial "
             "minimalista (sin texto en la imagen) que represente esta noticia de "
@@ -84,7 +91,7 @@ def image_node(state: AgentState) -> AgentState:
         path = generate_image(prompt_resp)
         if path:
             c["image"] = path
-    return {"candidates": state.get("candidates", [])}
+    return {"candidates": candidates}
 
 
 def draft_node(state: AgentState) -> AgentState:

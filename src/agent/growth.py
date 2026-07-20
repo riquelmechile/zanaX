@@ -1,10 +1,10 @@
 """Crecimiento en X: descubrir cuentas afines, seguir, dejar de seguir, comentar.
 
 LÍMITES (uso personal, coste optimizado pay-per-use 2026):
-- Seguir: máx. FOLLOW_PER_DAY/día (def. 25 ≈ $12/mes) en tandas de FOLLOW_BATCH
-  (def. 7) con pausas aleatorias de 30-60s entre follows (anti-ráfagas)
-- Dejar de seguir: máx. UNFOLLOW_PER_WEEK/semana (def. 50) en dosis diarias de
-  UNFOLLOW_BATCH (def. 7) y nunca cuentas en whitelist (X_NEVER_UNFOLLOW)
+- Seguir: máx. FOLLOW_PER_DAY/día (def. 15 ≈ $7/mes) en tandas de FOLLOW_BATCH
+  (def. 4) con pausas aleatorias de 30-60s entre follows (anti-ráfagas)
+- Dejar de seguir: máx. UNFOLLOW_PER_WEEK/semana (def. 30) en dosis diarias de
+  UNFOLLOW_BATCH (def. 5) y nunca cuentas en whitelist (X_NEVER_UNFOLLOW)
 - Comentarios: SIEMPRE pasan por aprobación en Telegram; el agente solo redacta
 
 Requiere X_BEARER_TOKEN (lectura) y las 4 claves OAuth1 (acciones).
@@ -113,8 +113,8 @@ def follow_top(limit: int | None = None) -> list[str]:
     la señal #1 que detecta el anti-spam de X. El scheduler llama a esta
     función varias veces al día con tandas pequeñas.
     """
-    cap = limit or int(os.getenv("FOLLOW_PER_DAY", "25"))
-    batch = int(os.getenv("FOLLOW_BATCH", "7"))
+    cap = limit or int(os.getenv("FOLLOW_PER_DAY", "15"))
+    batch = int(os.getenv("FOLLOW_BATCH", "4"))
     data = _load()
     remaining = min(batch, cap - _count_today(data["follows"]))
     if remaining <= 0:
@@ -146,11 +146,10 @@ def follow_top(limit: int | None = None) -> list[str]:
 def prune_following() -> list[str]:
     """Deja de seguir cuentas que no devolvieron el follow tras 7 días.
 
-    Conservador: tope semanal en dosis diarias y nunca toca la whitelist
-    X_NEVER_UNFOLLOW.
+    Conservador: tope semanal y nunca toca la whitelist X_NEVER_UNFOLLOW.
     """
-    cap = int(os.getenv("UNFOLLOW_PER_WEEK", "50"))
-    batch = int(os.getenv("UNFOLLOW_BATCH", "7"))  # dosis diaria
+    cap = int(os.getenv("UNFOLLOW_PER_WEEK", "30"))
+    batch = int(os.getenv("UNFOLLOW_BATCH", "5"))  # dosis diaria
     never = {h.strip().lstrip("@").lower()
              for h in os.getenv("X_NEVER_UNFOLLOW", "").split(",") if h.strip()}
     data = _load()
