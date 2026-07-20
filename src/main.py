@@ -15,7 +15,8 @@ from apscheduler.triggers.cron import CronTrigger
 from dotenv import load_dotenv
 
 from src.agent.graph import graph, llm
-from src.agent import timing
+from src.agent import growth, timing
+from src.agent.style import SYSTEM_PROMPT
 from src.approval import build_app, send_draft
 
 load_dotenv()
@@ -34,8 +35,31 @@ async def run_agent(app):
             await send_draft(app, d)
         if not drafts:
             log.info("Sin borradores válidos en este ciclo.")
+        # Comentarios proactivos: borradores de respuestas a posts del nicho
+        replies = await asyncio.to_thread(growth.draft_replies, llm("draft"), SYSTEM_PROMPT)
+        for r in replies:
+            await send_draft(app, r)
     except Exception:
         log.exception("Error en el ciclo del agente")
+
+
+async def run_growth_follow(app):
+    """Job diario: sigue cuentas afines (tope diario) y avisa por Telegram."""
+    followed = await asyncio.to_thread(growth.follow_top)
+    if followed:
+        chat_id = int(os.environ["TELEGRAM_CHAT_ID"])
+        await app.bot.send_message(
+            chat_id, "➕ Seguí a: " + ", ".join("@" + h for h in followed))
+
+
+async def run_growth_prune(app):
+    """Job semanal: deja de seguir cuentas que no devolvieron el follow."""
+    dropped = await asyncio.to_thread(growth.prune_following)
+    if dropped:
+        chat_id = int(os.environ["TELEGRAM_CHAT_ID"])
+        await app.bot.send_message(
+            chat_id, "➖ Dejé de seguir (sin follow-back en 7 días): "
+            + ", ".join("@" + h for h in dropped))
 
 
 def schedule_posts(scheduler: AsyncIOScheduler, app):
@@ -48,6 +72,11 @@ def schedule_posts(scheduler: AsyncIOScheduler, app):
     # Job diario: refresca métricas de engagement
     scheduler.add_job(lambda: timing.refresh_metrics(), CronTrigger(hour=7),
                       id="metrics")
+    # Crecimiento: seguir (diario) y limpiar following (semanal)
+    scheduler.add_job(run_growth_follow, CronTrigger(hour=8), args=[app],
+                      id="growth_follow")
+    scheduler.add_job(run_growth_prune, CronTrigger(day_of_week="sun", hour=10),
+                      args=[app], id="growth_prune")
     # Job semanal (lunes): el LLM re-analiza y reprograma los horarios
     def retrain():
         hours = timing.analyze_best_hours(llm())
