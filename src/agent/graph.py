@@ -1,6 +1,12 @@
-"""Grafo LangGraph proactivo: research -> select -> image -> draft -> approve -> publish.
+"""Grafo LangGraph: research -> select -> image -> draft -> critic -> approve -> publish.
 
-El flujo automático termina en `draft`; la aprobación (Telegram) y la
+Inteligencia 2026:
+- select y draft usan MEMORIA de contenido (anti-repetición + learnings reales)
+- critic: crítica grounded (rúbrica + top posts históricos) con modelo distinto
+  al que redactó; si la nota < umbral, reescribe (máx. N iteraciones)
+- research incluye fuentes MCP opcionales (arXiv, Product Hunt...)
+
+El flujo automático termina en `critic`; la aprobación (Telegram) y la
 publicación (X) son asíncronas y viven fuera del grafo.
 """
 from __future__ import annotations
@@ -11,8 +17,11 @@ from typing import Annotated, TypedDict
 
 from langgraph.graph import END, StateGraph
 
+from . import memory
+from .critic import critique, revise
 from .images import enabled as images_enabled, generate_image
 from .llm import get_llm
+from .mcp_sources import fetch_mcp_trends
 from .style import SYSTEM_PROMPT
 from .tools import gather_trends, web_search
 from .x_research import fetch_account_posts
@@ -33,22 +42,21 @@ def llm(role: str = "cheap"):
 # ---------- NODOS ----------
 
 def research_node(state: AgentState) -> AgentState:
-    """Recolecta tendencias de HN, GitHub, Reddit y de cuentas clave en X."""
-    trends = gather_trends() + fetch_account_posts()
+    """Recolecta tendencias de HN, GitHub, Reddit, X y servidores MCP."""
+    trends = gather_trends() + fetch_account_posts() + fetch_mcp_trends()
     return {"trends": trends}
 
 
 def select_node(state: AgentState) -> AgentState:
-    """El LLM analiza y elige las N mejores tendencias para AI/dev.
-
-    Prioriza lo que genera conversación (novedad, controversia sana,
-    utilidad práctica para devs) y evita repetir fuentes.
-    """
+    """El LLM elige las N mejores tendencias; la memoria filtra repetidos."""
     trends = state.get("trends", [])
     if not trends:
         return {"candidates": []}
+    # anti-repetición: descarta temas ya cubiertos antes de preguntar al LLM
+    fresh = [t for t in trends if not memory.already_covered(t["title"])]
+    pool = fresh or trends  # si TODO está cubierto, al menos no romper el ciclo
     n = int(os.getenv("POSTS_PER_DAY", "2"))
-    listing = "\n".join(f"{i}. [{t['source']}] {t['title']}" for i, t in enumerate(trends))
+    listing = "\n".join(f"{i}. [{t['source']}] {t['title']}" for i, t in enumerate(pool))
     prompt = (
         "Eres el editor de una cuenta de X sobre AI y desarrollo. De estas "
         f"tendencias elige las {n} con más potencial de conversación para devs "
@@ -58,17 +66,13 @@ def select_node(state: AgentState) -> AgentState:
     resp = llm().invoke(prompt).content.strip()
     picks = []
     for tok in resp.replace(" ", "").split(","):
-        if tok.isdigit() and int(tok) < len(trends):
-            picks.append(trends[int(tok)])
+        if tok.isdigit() and int(tok) < len(pool):
+            picks.append(pool[int(tok)])
     return {"candidates": picks[:n]}
 
 
 def image_node(state: AgentState) -> AgentState:
-    """Crea la imagen de cada candidato (nano banana) ANTES de redactar.
-
-    El prompt visual sale del tema, no del texto, para que el post se escriba
-    después pensando en acompañar esa imagen.
-    """
+    """Crea la imagen de cada candidato (nano banana) ANTES de redactar."""
     if not images_enabled():
         return {"candidates": state.get("candidates", [])}
     for c in state.get("candidates", []):
@@ -84,14 +88,16 @@ def image_node(state: AgentState) -> AgentState:
 
 
 def draft_node(state: AgentState) -> AgentState:
-    """Redacta el post con voz propia, ya sabiendo si lleva imagen."""
+    """Redacta con voz propia + aprendizajes reales de la audiencia."""
     drafts = []
+    learnings = memory.learning_context()
     for c in state.get("candidates", []):
         context = web_search(c["title"], limit=3)
         ctx = "\n".join(f"- {x['title']}: {x.get('snippet', '')[:200]}" for x in context)
         has_img = "SÍ" if c.get("image") else "NO"
         prompt = (
-            f"{SYSTEM_PROMPT}\n\nTENDENCIA: {c['title']}\nURL: {c['url']}\n"
+            f"{SYSTEM_PROMPT}\n\n{learnings}\n\n"
+            f"TENDENCIA: {c['title']}\nURL: {c['url']}\n"
             f"CONTEXTO ADICIONAL:\n{ctx}\n"
             f"EL POST LLEVA IMAGEN ADJUNTA: {has_img} (si lleva, el texto puede "
             "ser más corto porque la imagen comunica parte del mensaje).\n\n"
@@ -109,21 +115,42 @@ def draft_node(state: AgentState) -> AgentState:
     return {"drafts": drafts}
 
 
+def critic_node(state: AgentState) -> AgentState:
+    """Crítica grounded: puntúa contra rúbrica + top posts reales y reescribe.
+
+    El crítico usa el rol 'cheap' (modelo distinto al de redacción) para
+    romper puntos ciegos. Máx. CRITIC_MAX_RETRIES iteraciones por borrador.
+    """
+    threshold = float(os.getenv("CRITIC_THRESHOLD", "0.8"))
+    max_retries = int(os.getenv("CRITIC_MAX_RETRIES", "2"))
+    learnings = memory.learning_context()
+    for d in state.get("drafts", []):
+        for attempt in range(max_retries):
+            result = critique(llm(), d["text"], d["topic"], learnings)
+            d["critic_score"] = result["score"]
+            if result["score"] >= threshold or not result["feedback"]:
+                break
+            d["text"] = revise(llm("draft"), d["text"], result["feedback"],
+                               d["topic"], SYSTEM_PROMPT, bool(d.get("image")))
+    return {"drafts": state.get("drafts", [])}
+
+
 # ---------- GRAFO ----------
 
 def build_graph():
-    """research -> select -> image -> draft -> END. El scheduler envía los
-    borradores a Telegram y, al aprobar, se publican en X."""
+    """research -> select -> image -> draft -> critic -> END."""
     g = StateGraph(AgentState)
     g.add_node("research", research_node)
     g.add_node("select", select_node)
     g.add_node("image", image_node)
     g.add_node("draft", draft_node)
+    g.add_node("critic", critic_node)
     g.set_entry_point("research")
     g.add_edge("research", "select")
     g.add_edge("select", "image")
     g.add_edge("image", "draft")
-    g.add_edge("draft", END)
+    g.add_edge("draft", "critic")
+    g.add_edge("critic", END)
     return g.compile()
 
 

@@ -15,7 +15,7 @@ from apscheduler.triggers.cron import CronTrigger
 from dotenv import load_dotenv
 
 from src.agent.graph import graph, llm
-from src.agent import growth, timing
+from src.agent import growth, memory, timing
 from src.agent.style import SYSTEM_PROMPT
 from src.approval import build_app, send_draft
 
@@ -79,10 +79,12 @@ def schedule_posts(scheduler: AsyncIOScheduler, app):
                           id=f"growth_follow_{h}")
     scheduler.add_job(run_growth_prune, CronTrigger(hour=10),
                       args=[app], id="growth_prune")
-    # Job semanal (lunes): el LLM re-analiza y reprograma los horarios
+    # Job semanal (lunes): el LLM re-analiza horarios y extrae aprendizajes
     def retrain():
         hours = timing.analyze_best_hours(llm())
         log.info("Timing actualizado por LLM: %s", hours)
+        learnings = memory.update_learnings(llm())
+        log.info("Learnings actualizados: %s", learnings)
         schedule_posts(scheduler, app)
     scheduler.add_job(retrain, CronTrigger(day_of_week="mon", hour=8), id="retrain")
 

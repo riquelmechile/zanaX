@@ -13,7 +13,7 @@ from telegram.ext import (Application, CallbackQueryHandler, CommandHandler,
                           ContextTypes, MessageHandler, filters)
 
 from . import x_client
-from .agent import growth, timing
+from .agent import growth, memory, timing
 
 PENDING: dict[int, dict] = {}  # message_id -> draft
 _chat_id = None
@@ -66,6 +66,7 @@ async def on_button(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         else:
             tweet_id = x_client.publish(draft["text"], draft.get("image"))
             timing.record_publish(tweet_id, draft["text"], bool(draft.get("image")))
+            memory.record_post(draft.get("topic", ""), draft["text"], tweet_id)
         await q.edit_message_text(f"✅ Publicado (id: {tweet_id})\n\n{draft['text']}")
     else:
         await q.edit_message_text(f"❌ Descartado\n\n{draft['text']}")
@@ -84,6 +85,7 @@ async def on_edit_reply(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         else:
             tweet_id = x_client.publish(msg.text, orig.get("image"))
             timing.record_publish(tweet_id, msg.text, bool(orig.get("image")))
+            memory.record_post(orig.get("topic", ""), msg.text, tweet_id)
         await msg.reply_text(f"✅ Publicada versión editada (id: {tweet_id})")
     elif orig:
         await msg.reply_text("⚠️ Texto vacío o >280 caracteres, no se publicó.")
