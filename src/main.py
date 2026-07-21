@@ -43,25 +43,6 @@ async def run_agent(app):
         log.exception("Error en el ciclo del agente")
 
 
-async def run_growth_follow(app):
-    """Job por tanda: sigue cuentas afines (tope diario por tandas) y avisa."""
-    followed = await asyncio.to_thread(growth.follow_top)
-    if followed:
-        chat_id = int(os.environ["TELEGRAM_CHAT_ID"])
-        await app.bot.send_message(
-            chat_id, "➕ Seguí a: " + ", ".join("@" + h for h in followed))
-
-
-async def run_growth_prune(app):
-    """Job diario: deja de seguir en dosis pequeñas (tope semanal)."""
-    dropped = await asyncio.to_thread(growth.prune_following)
-    if dropped:
-        chat_id = int(os.environ["TELEGRAM_CHAT_ID"])
-        await app.bot.send_message(
-            chat_id, "➖ Dejé de seguir (sin follow-back en 7 días): "
-            + ", ".join("@" + h for h in dropped))
-
-
 def schedule_posts(scheduler: AsyncIOScheduler, app):
     """(Re)programa los ciclos del agente según las mejores horas aprendidas."""
     scheduler.remove_all_jobs()
@@ -72,13 +53,6 @@ def schedule_posts(scheduler: AsyncIOScheduler, app):
     # Job diario: refresca métricas de engagement
     scheduler.add_job(lambda: timing.refresh_metrics(), CronTrigger(hour=7),
                       id="metrics")
-    # Crecimiento: seguir en 4 tandas espaciadas al día (evita ráfagas) y
-    # limpiar following a diario en dosis pequeñas (tope semanal)
-    for h in (8, 12, 16, 20):
-        scheduler.add_job(run_growth_follow, CronTrigger(hour=h), args=[app],
-                          id=f"growth_follow_{h}")
-    scheduler.add_job(run_growth_prune, CronTrigger(hour=10),
-                      args=[app], id="growth_prune")
     # Job semanal (lunes): el LLM re-analiza horarios y extrae aprendizajes
     def retrain():
         hours = timing.analyze_best_hours(llm())
