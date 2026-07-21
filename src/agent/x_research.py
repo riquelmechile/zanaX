@@ -26,6 +26,9 @@ def fetch_account_posts(limit_per_account: int = 3) -> list[dict]:
 
     Devuelve items con el mismo formato que tools.gather_trends().
     """
+    from .config import free_mode
+    if free_mode():
+        return []  # modo gratis: leer X cuesta dinero; research va por fuentes free
     bearer = os.getenv("X_BEARER_TOKEN")
     if not bearer:
         return []

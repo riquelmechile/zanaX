@@ -21,7 +21,7 @@ def get_llm(role: str = "cheap"):
 
     provider = os.getenv("LLM_PROVIDER", "google").lower()
     if role == "draft":
-        model = os.getenv("LLM_MODEL_DRAFT", "gemini-2.5-pro")
+        model = os.getenv("LLM_MODEL_DRAFT", "gemini-2.5-flash")
         temperature = 0.8
     else:
         model = os.getenv("LLM_MODEL", "gemini-2.5-flash")

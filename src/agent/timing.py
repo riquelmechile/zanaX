@@ -15,7 +15,7 @@ import os
 import pathlib
 from datetime import datetime, timezone
 
-DATA_DIR = pathlib.Path(os.getenv("DATA_DIR", "/tmp/zanax-data"))
+DATA_DIR = pathlib.Path(os.getenv("DATA_DIR", "./data"))
 PUBLISHED = DATA_DIR / "published.json"
 SCHEDULE = DATA_DIR / "schedule.json"
 
@@ -56,7 +56,13 @@ def record_publish(tweet_id: str, text: str, had_image: bool):
 
 
 def refresh_metrics():
-    """Actualiza likes/RTs de los posts registrados (vía X API)."""
+    """Actualiza likes/RTs de los posts registrados (vía X API).
+
+    En FREE_MODE no hace nada: leer métricas cuesta dinero en la API de X.
+    """
+    from .config import free_mode
+    if free_mode():
+        return
     bearer = os.getenv("X_BEARER_TOKEN")
     rows = _load(PUBLISHED, [])
     if not bearer or not rows:
@@ -83,7 +89,16 @@ def analyze_best_hours(llm) -> list[int]:
     """Pide al LLM las 2 mejores horas según historial + heurísticas.
 
     Devuelve lista de horas (0-23, hora local del servidor) y la persiste.
+
+    En FREE_MODE no hay métricas de X: se usan directamente las horas fijas
+    de POST_HOURS (o la heurística inicial), sin llamar al LLM.
     """
+    from .config import free_mode
+    if free_mode():
+        hours = current_hours()
+        _save(SCHEDULE, {"hours": hours,
+                         "updated_at": datetime.now(timezone.utc).isoformat()})
+        return hours
     rows = [r for r in _load(PUBLISHED, []) if r.get("metrics")]
     history = "\n".join(
         f"- {r['published_at']} | imagen={r['had_image']} | "
@@ -117,5 +132,10 @@ publicar, separadas por coma. SOLO los números, ej: 9,18"""
 
 
 def current_hours() -> list[int]:
-    """Horas actualmente configuradas (o las por defecto)."""
+    """Horas actualmente configuradas: POST_HOURS (env) > schedule.json > default."""
+    raw = os.getenv("POST_HOURS", "")
+    hours = sorted({int(h) for h in raw.split(",")
+                    if h.strip().isdigit() and 0 <= int(h) <= 23})
+    if hours:
+        return hours
     return _load(SCHEDULE, {}).get("hours") or DEFAULT_HOURS
