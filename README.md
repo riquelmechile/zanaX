@@ -35,9 +35,7 @@ flowchart LR
     LLM -.reprograma.-> S
 
     subgraph Growth
-        G1[descubre cuentas afines] --> G2[sigue 15/día<br/>en 4 tandas]
-        G3[prune sin follow-back<br/>30/semana]
-        G4[💬 respuestas con tu voz<br/>siempre con tu ✅]
+        G4[💬 respuestas con tu voz<br/>a posts del nicho<br/>siempre con tu ✅]
     end
 ```
 
@@ -55,7 +53,7 @@ flowchart LR
 | **Crítico** | Puntúa contra rúbrica + tus posts top históricos (modelo distinto al redactor); reescribe si < `CRITIC_THRESHOLD` | `src/agent/critic.py` |
 | **Memoria** | Temas cubiertos (anti-repetición) + lecciones semanales de tu engagement real | `src/agent/memory.py` |
 | **Timing** | Aprende tus mejores horas con tu engagement real; reprograma el scheduler | `src/agent/timing.py` |
-| **Growth** | Descubre/afines, follow/unfollow con límites seguros, respuestas con aprobación | `src/agent/growth.py` |
+| **Growth** | Respuestas con tu voz a posts del nicho, siempre con tu aprobación | `src/agent/growth.py` |
 | **Aprobación** | Bot de Telegram: ✅ publica · ❌ descarta · cita el mensaje para editar | `src/approval.py` |
 | **Publisher** | Posts, respuestas e imágenes vía X API v2; `DRY_RUN` = modo prueba | `src/x_client.py` |
 
@@ -88,10 +86,6 @@ python -m src.main     # ciclo de prueba al iniciar
 | `ENABLE_IMAGES` | `false` | Activa nano banana 🍌 |
 | `POSTS_PER_DAY` | `3` | Borradores por ciclo (2 ciclos/día = 6 posts/día) |
 | `IMAGE_RATIO` | `0.5` | Fracción de posts con imagen (0.5 = la mitad) |
-| `FOLLOW_PER_DAY` | `15` | Máx. follows/día (cada uno cuesta $0.015) |
-| `FOLLOW_BATCH` | `4` | Por tanda — 4 tandas: 8h, 12h, 16h, 20h |
-| `UNFOLLOW_PER_WEEK` | `30` | Máx. 30/semana, en dosis de `UNFOLLOW_BATCH=5` |
-| `X_NEVER_UNFOLLOW` | — | Cuentas protegidas para siempre |
 | `MEMORY_ENABLED` | `true` | Memoria de contenido (anti-repetición + learnings) |
 | `CRITIC_THRESHOLD` | `0.8` | Nota mínima del crítico para mandarte el post |
 | `CRITIC_MAX_RETRIES` | `2` | Reescrituras máximas por borrador |
@@ -105,14 +99,13 @@ python -m src.main     # ciclo de prueba al iniciar
 3. Cada lunes, un LLM decide tus 2 mejores horas **y** extrae 3-5 lecciones de qué temas/ganchos rinden más en tu audiencia
 4. El scheduler se reprograma solo y las lecciones se inyectan en la redacción; la memoria evita repetir temas ya cubiertos
 
-## 📈 Crecimiento (máximo seguro)
+## 📈 Crecimiento
 
-- **Seguir**: hasta **15/día** en 4 tandas, con pausas aleatorias de **30-60s** entre follows; filtra bots (mín. 500 followers) y busca engagement real en el nicho
-- **Dejar de seguir**: limpieza diaria en dosis de 5, máx. **30/semana**, solo sin follow-back tras 7 días
 - **Comentar**: respuestas redactadas con tu voz a posts con tracción → llegan como "💬 Respuesta propuesta" y solo se publican con tu ✅
+- **Seguir/dejar de seguir**: a mano desde la app de X. Se eliminó la automatización: cada follow cuesta $0.015 en la API y las ráfagas son la señal #1 del anti-spam — haciéndolo tú, gratis y sin riesgo.
 
 > [!WARNING]
-> **Coste pay-per-use (2026):** cada follow cuesta $0.015 en la API de X (25/día ≈ $12/mes) y cada post **con link** cuesta $0.20 — por eso el agente nunca pone links en los posts. Subir `FOLLOW_PER_DAY` aumenta coste linealmente y las ráfagas >30-50/hora disparan el anti-spam de X.
+> **Coste pay-per-use (2026):** cada post **con link** cuesta $0.20 en la API de X — por eso el agente nunca pone links en los posts.
 
 ## 💰 Coste mensual estimado (perfil económico actual)
 
@@ -120,14 +113,13 @@ python -m src.main     # ciclo de prueba al iniciar
 |---|---|---|
 | Posts (X API) | 180 × $0.015 | $3 |
 | Respuestas (4/día) | 120 × $0.015 | $2 |
-| Follows/unfollows (15+4/día) | ~570 × $0.015 | $9 |
-| Lecturas (research + growth + métricas) | ~6.000 | $15–30 |
+| Lecturas (research + métricas) | ~3.500 | $10–20 |
 | Imágenes nano banana (3/día, `IMAGE_RATIO=0.5`) | 90 × ~$0.039 | $4 |
 | LLM (Gemini Flash + Pro) | ~4M tokens | $3–6 |
 | Infra (Railway) | — | $5 |
-| **Total** | | **~$41–59/mes** |
+| **Total** | | **~$27–40/mes** |
 
-**Perfil agresivo** (si el engagement lo justifica): `POSTS_PER_DAY=10` + `FOLLOW_PER_DAY=25` + `IMAGE_RATIO=1.0` → ~$88–123/mes. Los dos mayores drivers de coste son las **lecturas del growth** y las **imágenes**.
+Sin follow/unfollow automático (se hace a mano, gratis): ahorro de ~$9/mes en acciones + las lecturas de descubrimiento de cuentas. Si el engagement lo justifica, `POSTS_PER_DAY=10` + `IMAGE_RATIO=1.0` → ~$50–75/mes.
 
 ## ☁️ Deploy en Railway (24/7)
 
@@ -142,7 +134,7 @@ VPS alternativo: `docker build -t zanax . && docker run --env-file .env zanax`
 - [x] Grafo research → select → image → draft
 - [x] Imágenes nano banana 🍌
 - [x] Timing aprendido con LLM
-- [x] Growth: follow/unfollow/comentarios con límites seguros
+- [x] Growth: respuestas propuestas a posts del nicho (follow/unfollow a mano)
 - [x] Memoria de temas ya cubiertos (anti-repetición) + learnings de engagement
 - [x] Crítico grounded que reescribe borradores antes de pedir aprobación
 - [x] Fuentes extra vía MCP (arXiv, Product Hunt…)
